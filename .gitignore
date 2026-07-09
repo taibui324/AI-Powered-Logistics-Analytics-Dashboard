@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+dist/
+build/
+
+# Test and coverage output
+coverage/
+playwright-report/
+test-results/
+.nyc_output/
+
+# Runtime and tooling caches
+*.tsbuildinfo
+.eslintcache
+.turbo/
+.cache/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Hosting and local deployment state
+.vercel/
+.netlify/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local assignment/source artifacts kept outside the app source
+Coding_assignment*.docx
+logistics-spec*.docx
+logistics-spec*.pdf
+mock_logistics_data*.csv
+.vercel
