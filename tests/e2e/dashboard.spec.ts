@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("reviewer can use dashboard filters and analyst answers", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Logistics AI Analytics" })).toBeVisible();
+  await expect(page.getByText("Read-only logistics dataset")).toHaveCount(0);
   await expect(page.locator(".metric-card").filter({ hasText: "Total Orders" }).first()).toBeVisible();
   await expect(page.getByText("Order volume over time")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Dashboard explainability" })).toBeVisible();

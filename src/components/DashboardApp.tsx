@@ -113,7 +113,6 @@ export function DashboardApp() {
     <main className="app-shell">
       <header className="hero">
         <div>
-          <p className="eyebrow">Read-only logistics dataset</p>
           <h1>Logistics AI Analytics</h1>
           <p>{loading ? "Refreshing analytics..." : `${summary?.explainability.sourceRows ?? 0} rows in view`}</p>
         </div>
