@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createClient } from "@supabase/supabase-js";
+import pg from "pg";
 
 const HEADERS = [
   "client_id",
@@ -62,6 +62,14 @@ function splitCsvLine(line) {
   return cells;
 }
 
+function numberCell(row, key) {
+  const raw = row[key]?.trim();
+  if (!raw || !/^-?\d+(\.\d+)?$/.test(raw)) {
+    throw new Error(`Invalid numeric value for ${key}`);
+  }
+  return Number(raw);
+}
+
 function parseCsv(csv) {
   const [headerLine, ...lines] = csv.trim().split(/\r?\n/);
   const headers = splitCsvLine(headerLine);
@@ -71,6 +79,12 @@ function parseCsv(csv) {
 
   return lines.filter(Boolean).map((line) => {
     const values = splitCsvLine(line);
+    if (values.length === headers.length + 1 && values[values.length - 1] === "") {
+      values.pop();
+    }
+    if (values.length !== headers.length) {
+      throw new Error("Unexpected logistics CSV column count");
+    }
     const row = Object.fromEntries(headers.map((key, index) => [key, values[index] ?? ""]));
     return {
       client_id: row.client_id,
@@ -83,11 +97,11 @@ function parseCsv(csv) {
       status: row.status,
       sku: row.sku,
       product_category: row.product_category,
-      quantity: Number(row.quantity),
-      unit_price_usd: Number(row.unit_price_usd),
-      order_value_usd: Number(row.order_value_usd),
+      quantity: numberCell(row, "quantity"),
+      unit_price_usd: numberCell(row, "unit_price_usd"),
+      order_value_usd: numberCell(row, "order_value_usd"),
       is_promo: row.is_promo === "1",
-      promo_discount_pct: Number(row.promo_discount_pct),
+      promo_discount_pct: numberCell(row, "promo_discount_pct"),
       region: row.region,
       warehouse: row.warehouse
     };
@@ -98,24 +112,69 @@ async function main() {
   loadEnvFile(resolve(process.cwd(), ".env.local"));
   loadEnvFile(resolve(process.cwd(), ".env"));
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for import.");
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is required for Postgres import.");
   }
 
   const csvPath = resolve(process.cwd(), process.argv[2] ?? "data/logistics.csv");
   const rows = parseCsv(readFileSync(csvPath, "utf8"));
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false }
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    ssl: process.env.POSTGRES_SSL === "false" ? false : { rejectUnauthorized: false }
   });
 
-  for (let index = 0; index < rows.length; index += 100) {
-    const chunk = rows.slice(index, index + 100);
-    const { error } = await supabase.from("logistics_orders").upsert(chunk, { onConflict: "order_id" });
-    if (error) {
-      throw new Error(`Failed to import rows ${index + 1}-${index + chunk.length}: ${error.message}`);
+  try {
+    await pool.query(readFileSync(resolve(process.cwd(), "db/migrations/001_create_logistics_orders.sql"), "utf8"));
+    const insertSql = `
+      insert into public.logistics_orders (
+        client_id, order_id, order_date, delivery_date, carrier, origin_city, destination_city,
+        status, sku, product_category, quantity, unit_price_usd, order_value_usd,
+        is_promo, promo_discount_pct, region, warehouse
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      on conflict (order_id) do update set
+        client_id = excluded.client_id,
+        order_date = excluded.order_date,
+        delivery_date = excluded.delivery_date,
+        carrier = excluded.carrier,
+        origin_city = excluded.origin_city,
+        destination_city = excluded.destination_city,
+        status = excluded.status,
+        sku = excluded.sku,
+        product_category = excluded.product_category,
+        quantity = excluded.quantity,
+        unit_price_usd = excluded.unit_price_usd,
+        order_value_usd = excluded.order_value_usd,
+        is_promo = excluded.is_promo,
+        promo_discount_pct = excluded.promo_discount_pct,
+        region = excluded.region,
+        warehouse = excluded.warehouse
+    `;
+
+    for (const row of rows) {
+      await pool.query(insertSql, [
+        row.client_id,
+        row.order_id,
+        row.order_date,
+        row.delivery_date,
+        row.carrier,
+        row.origin_city,
+        row.destination_city,
+        row.status,
+        row.sku,
+        row.product_category,
+        row.quantity,
+        row.unit_price_usd,
+        row.order_value_usd,
+        row.is_promo,
+        row.promo_discount_pct,
+        row.region,
+        row.warehouse
+      ]);
     }
+  } finally {
+    await pool.end();
   }
 
   const statusCounts = rows.reduce((counts, row) => {
@@ -123,7 +182,7 @@ async function main() {
     return counts;
   }, {});
 
-  console.log(`Imported ${rows.length} logistics orders into Supabase.`);
+  console.log(`Imported ${rows.length} logistics orders into Postgres.`);
   console.log(`Max order_date: ${rows.reduce((max, row) => (row.order_date > max ? row.order_date : max), "")}`);
   console.log(`Status counts: ${JSON.stringify(statusCounts)}`);
 }

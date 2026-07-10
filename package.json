@@ -9,11 +9,12 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "db:import": "node scripts/import-logistics-csv.mjs",
+    "db:verify": "node scripts/verify-postgres-parity.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.110.1",
     "next": "16.2.10",
+    "pg": "8.16.3",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "recharts": "3.9.2",
@@ -27,6 +28,7 @@
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",
     "@types/node": "26.1.1",
+    "@types/pg": "8.15.6",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "typescript": "^5.9.3",

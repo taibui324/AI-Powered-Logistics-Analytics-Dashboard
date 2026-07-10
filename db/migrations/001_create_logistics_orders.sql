@@ -24,18 +24,6 @@ create table if not exists public.logistics_orders (
   constraint logistics_orders_delivery_date_check check (delivery_date is null or delivery_date >= order_date)
 );
 
-alter table public.logistics_orders enable row level security;
-
-revoke all on table public.logistics_orders from anon, authenticated;
-grant select on table public.logistics_orders to anon, authenticated;
-
-drop policy if exists logistics_orders_readonly_select on public.logistics_orders;
-create policy logistics_orders_readonly_select
-  on public.logistics_orders
-  for select
-  to anon, authenticated
-  using (true);
-
 create index if not exists logistics_orders_order_date_idx
   on public.logistics_orders (order_date);
 

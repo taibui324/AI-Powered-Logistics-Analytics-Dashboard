@@ -5,8 +5,8 @@ import { summarizeDashboard, highestCarrierDelayRate, latestOrderDate } from "@/
 import { forecastDemand } from "@/lib/analytics/forecast";
 import { answerQuestion } from "@/lib/ai/interpreter";
 import { answerQuestionWithOpenAI } from "@/lib/ai/openaiIntent";
-import { shouldUseSupabase } from "@/lib/data/logisticsRepository";
-import { mapSupabaseOrder } from "@/lib/data/supabaseLogisticsRepository";
+import { shouldUsePostgres } from "@/lib/data/logisticsRepository";
+import { mapPostgresOrder } from "@/lib/data/postgresLogisticsRepository";
 
 const csv = `client_id,order_id,order_date,delivery_date,carrier,origin_city,destination_city,status,sku,product_category,quantity,unit_price_usd,order_value_usd,is_promo,promo_discount_pct,region,warehouse
 CL-1,O-1,2025-01-01,2025-01-03,DHL,A,B,delivered,SKU-1,PAPER,2,10,20,0,0,UK,LON
@@ -244,24 +244,22 @@ describe("canonical logistics dataset", () => {
   });
 });
 
-describe("supabase postgres integration", () => {
-  it("defines a read-only logistics_orders migration", () => {
-    const migration = readFileSync("supabase/migrations/001_create_logistics_orders.sql", "utf8");
+describe("postgres integration", () => {
+  it("defines a typed logistics_orders migration", () => {
+    const migration = readFileSync("db/migrations/001_create_logistics_orders.sql", "utf8");
     expect(migration).toContain("create table if not exists public.logistics_orders");
     expect(migration).toContain("order_id text primary key");
     expect(migration).toContain("unit_price_usd numeric(10, 2)");
     expect(migration).toContain("order_value_usd numeric(12, 2)");
-    expect(migration).toContain("alter table public.logistics_orders enable row level security");
-    expect(migration).toContain("grant select on table public.logistics_orders to anon, authenticated");
-    expect(migration).toContain("for select");
-    expect(migration).not.toMatch(/for\s+(insert|update|delete)/i);
+    expect(migration).toContain("create index if not exists logistics_orders_order_date_idx");
+    expect(migration).not.toMatch(/grant\s+all|create\s+policy/i);
   });
 
-  it("maps supabase rows into the logistics domain model", () => {
-    expect(mapSupabaseOrder({
+  it("maps postgres rows into the logistics domain model", () => {
+    expect(mapPostgresOrder({
       client_id: "CL-1",
       order_id: "O-1",
-      order_date: "2025-01-01",
+      order_date: new Date("2025-01-01T00:00:00Z"),
       delivery_date: null,
       carrier: "DHL",
       origin_city: "A",
@@ -288,33 +286,27 @@ describe("supabase postgres integration", () => {
     });
   });
 
-  it("selects the supabase repository only when explicitly configured or env vars exist", () => {
+  it("selects the postgres repository only when explicitly configured or DATABASE_URL exists", () => {
     const oldSource = process.env.LOGISTICS_DATA_SOURCE;
-    const oldUrl = process.env.SUPABASE_URL;
-    const oldAnon = process.env.SUPABASE_ANON_KEY;
+    const oldDatabaseUrl = process.env.DATABASE_URL;
 
     delete process.env.LOGISTICS_DATA_SOURCE;
-    delete process.env.SUPABASE_URL;
-    delete process.env.SUPABASE_ANON_KEY;
-    expect(shouldUseSupabase()).toBe(false);
+    delete process.env.DATABASE_URL;
+    expect(shouldUsePostgres()).toBe(false);
 
-    process.env.SUPABASE_URL = "https://example.supabase.co";
-    process.env.SUPABASE_ANON_KEY = "anon";
-    expect(shouldUseSupabase()).toBe(true);
+    process.env.DATABASE_URL = "postgres://user:password@localhost:5432/logistics";
+    expect(shouldUsePostgres()).toBe(true);
 
     process.env.LOGISTICS_DATA_SOURCE = "csv";
-    expect(shouldUseSupabase()).toBe(false);
+    expect(shouldUsePostgres()).toBe(false);
 
-    process.env.LOGISTICS_DATA_SOURCE = "supabase";
-    delete process.env.SUPABASE_URL;
-    delete process.env.SUPABASE_ANON_KEY;
-    expect(shouldUseSupabase()).toBe(true);
+    process.env.LOGISTICS_DATA_SOURCE = "postgres";
+    delete process.env.DATABASE_URL;
+    expect(shouldUsePostgres()).toBe(true);
 
     if (oldSource === undefined) delete process.env.LOGISTICS_DATA_SOURCE;
     else process.env.LOGISTICS_DATA_SOURCE = oldSource;
-    if (oldUrl === undefined) delete process.env.SUPABASE_URL;
-    else process.env.SUPABASE_URL = oldUrl;
-    if (oldAnon === undefined) delete process.env.SUPABASE_ANON_KEY;
-    else process.env.SUPABASE_ANON_KEY = oldAnon;
+    if (oldDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = oldDatabaseUrl;
   });
 });

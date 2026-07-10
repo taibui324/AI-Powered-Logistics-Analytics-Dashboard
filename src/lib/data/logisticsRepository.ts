@@ -12,9 +12,9 @@ export function requireServerEnv(name: string) {
   return value;
 }
 
-export function shouldUseSupabase() {
+export function shouldUsePostgres() {
   const source = process.env.LOGISTICS_DATA_SOURCE?.toLowerCase();
-  if (source === "supabase") return true;
+  if (source === "postgres") return true;
   if (source === "csv") return false;
-  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
+  return Boolean(process.env.DATABASE_URL);
 }

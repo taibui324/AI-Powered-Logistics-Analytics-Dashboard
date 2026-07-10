@@ -1,6 +1,6 @@
 # Logistics AI Analytics
 
-A Next.js dashboard for the logistics analytics assignment. It uses one unified read-only logistics dataset for dashboard KPIs, natural-language analytical answers, dynamic charts, and monthly demand forecasting. The provided CSV is the canonical seed and valid runtime source; Supabase PostgreSQL is supported as an optional production-style read-only runtime adapter.
+A Next.js dashboard for the logistics analytics assignment. It uses one unified read-only logistics dataset for dashboard KPIs, natural-language analytical answers, dynamic charts, and monthly demand forecasting. The provided CSV is the canonical seed and valid runtime source; PostgreSQL is supported as an optional production-style runtime adapter.
 
 ## Local Setup
 
@@ -22,28 +22,28 @@ npm run build
 npm run test:e2e
 ```
 
-To seed Supabase after applying `supabase/migrations/001_create_logistics_orders.sql`:
+To create and seed the PostgreSQL table from `data/logistics.csv`:
 
 ```bash
-npm run db:import
+DATABASE_URL=postgres://user:password@host:5432/database npm run db:import
+DATABASE_URL=postgres://user:password@host:5432/database npm run db:verify
 ```
 
 ## Environment
 
 - `OPENAI_API_KEY`: optional. The app works without it through deterministic fallback routing for the required examples.
 - `OPENAI_MODEL`: optional. Defaults to `gpt-5.4-mini` for structured intent classification when `OPENAI_API_KEY` is present.
-- `LOGISTICS_DATA_SOURCE`: optional. Use `csv` to force the canonical CSV runtime, `supabase` to require Supabase, or leave unset to use Supabase only when `SUPABASE_URL` and `SUPABASE_ANON_KEY` exist.
-- `SUPABASE_URL`: optional Supabase project URL for PostgreSQL-backed runtime reads.
-- `SUPABASE_ANON_KEY`: optional read-only Supabase anon/publishable key used by server route handlers.
-- `SUPABASE_SERVICE_ROLE_KEY`: import-only secret for `npm run db:import`; never expose it to browser/client code.
+- `LOGISTICS_DATA_SOURCE`: optional. Use `csv` to force the canonical CSV runtime, `postgres` to require PostgreSQL, or leave unset to use PostgreSQL when `DATABASE_URL` exists.
+- `DATABASE_URL`: optional PostgreSQL connection string for runtime reads and `npm run db:import` seeding.
+- `POSTGRES_SSL`: optional. Leave unset for hosted PostgreSQL that requires SSL; set `false` for local Postgres.
 - `NEXT_PUBLIC_DEPLOYMENT_URL`: optional deployment URL. Current deployment is `https://ai-analytics-dashboard-puce.vercel.app`.
 
 ## Architecture And Data Flow
 
 - `data/logistics.csv` is the canonical read-only seed and fallback runtime dataset copied from `mock_logistics_data (1).csv`.
-- `supabase/migrations/001_create_logistics_orders.sql` creates the optional read-only `public.logistics_orders` table, typed constraints, indexes, and select-only RLS policy.
-- `scripts/import-logistics-csv.mjs` imports the CSV into Supabase with the service role for operator-controlled seeding.
-- `src/lib/data` exposes a repository boundary that reads from Supabase when configured and falls back to the CSV fixture locally.
+- `db/migrations/001_create_logistics_orders.sql` creates the optional `public.logistics_orders` table with typed constraints and indexes.
+- `scripts/import-logistics-csv.mjs` applies the migration and imports the CSV into PostgreSQL through `DATABASE_URL`.
+- `src/lib/data` exposes a repository boundary that reads from PostgreSQL when configured and falls back to the CSV fixture locally.
 - `src/lib/analytics` computes KPIs, filters, chart rows, carrier delay rankings, relative date windows, and forecasts.
 - `src/lib/ai/interpreter.ts` converts supported questions into bounded structured intents.
 - `src/app/api/dashboard` and `src/app/api/ask` expose the shared analytics layer to the UI.
@@ -81,14 +81,14 @@ Forecasting aggregates monthly quantity, then projects the requested horizon fro
 
 ## Limitations
 
-- CSV runtime is the default assignment-valid data path. Supabase must be seeded from `data/logistics.csv` before enabling `LOGISTICS_DATA_SOURCE=supabase`.
+- CSV runtime is the default assignment-valid data path. PostgreSQL must be seeded from `data/logistics.csv` before enabling `LOGISTICS_DATA_SOURCE=postgres`.
 - The fallback interpreter intentionally supports a bounded question set.
 - Forecasting is deterministic and explainable, not a production statistical model.
 - The app does not include user accounts, saved reports, query history, or live logistics-system ingestion.
 
 ## Future Improvements
 
-- Add Supabase deployment automation and scheduled seed/parity checks for larger datasets.
+- Add PostgreSQL deployment automation and scheduled seed/parity checks for larger datasets.
 - Add forecast confidence bands once enough history exists per SKU/category.
 - Expand OpenAI structured intent parsing once model credentials and evals are ready.
 

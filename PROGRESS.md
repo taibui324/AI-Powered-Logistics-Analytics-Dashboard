@@ -10,7 +10,7 @@ Completed phases:
 - Agent collaboration: consulted `postgres-pro`, `frontend-developer`, `nextjs-developer`, `backend-developer`, `fullstack-developer`, and `code-reviewer` roles.
 - Scaffold: built a Next.js App Router application with TypeScript, Recharts, Vitest, Playwright, `.env.example`, and deployment-ready scripts.
 - Data layer: copied the canonical CSV to `data/logistics.csv`, parsed it as read-only typed rows, and locked the real dataset profile in tests.
-- Supabase/PostgreSQL: added a read-only `logistics_orders` migration, CSV import script, environment contract, and repository adapter so deployed runtime data can come from Supabase while CSV remains the seed/reference fixture.
+- PostgreSQL: added a `logistics_orders` migration, CSV import script, environment contract, and repository adapter so deployed runtime data can come from Postgres while CSV remains the seed/reference fixture.
 - Analytics: implemented dashboard KPIs, filters, chart specs, carrier delay-rate ranking with denominators, dataset-relative dates, and monthly demand forecasting.
 - AI orchestration: implemented bounded deterministic routing for required prompts plus unsupported-query responses that do not fabricate answers.
 - Optional OpenAI path: when `OPENAI_API_KEY` exists, `/api/ask` requests a structured intent from OpenAI and validates it before calling deterministic local tools.
@@ -38,4 +38,4 @@ Evidence:
 Notes:
 
 - The app works without `OPENAI_API_KEY`; deterministic fallback handles the required examples.
-- CSV remains the seed/reference source. Supabase PostgreSQL is now supported as the runtime database when `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `LOGISTICS_DATA_SOURCE=supabase` are configured.
+- CSV remains the seed/reference source. PostgreSQL is now supported as the runtime database when `DATABASE_URL` and `LOGISTICS_DATA_SOURCE=postgres` are configured.
