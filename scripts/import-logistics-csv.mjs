@@ -108,6 +108,13 @@ function parseCsv(csv) {
   });
 }
 
+function postgresConnectionString(databaseUrl) {
+  if (process.env.POSTGRES_SSL === "false") return databaseUrl;
+  const url = new URL(databaseUrl);
+  url.searchParams.delete("sslmode");
+  return url.toString();
+}
+
 async function main() {
   loadEnvFile(resolve(process.cwd(), ".env.local"));
   loadEnvFile(resolve(process.cwd(), ".env"));
@@ -120,7 +127,7 @@ async function main() {
   const csvPath = resolve(process.cwd(), process.argv[2] ?? "data/logistics.csv");
   const rows = parseCsv(readFileSync(csvPath, "utf8"));
   const pool = new pg.Pool({
-    connectionString: databaseUrl,
+    connectionString: postgresConnectionString(databaseUrl),
     ssl: process.env.POSTGRES_SSL === "false" ? false : { rejectUnauthorized: false }
   });
 

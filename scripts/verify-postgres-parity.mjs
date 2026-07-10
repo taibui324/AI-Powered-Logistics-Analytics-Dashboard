@@ -72,6 +72,13 @@ function sortObjectByKey(value) {
   return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)));
 }
 
+function postgresConnectionString(databaseUrl) {
+  if (process.env.POSTGRES_SSL === "false") return databaseUrl;
+  const url = new URL(databaseUrl);
+  url.searchParams.delete("sslmode");
+  return url.toString();
+}
+
 async function main() {
   loadEnvFile(resolve(process.cwd(), ".env.local"));
   loadEnvFile(resolve(process.cwd(), ".env"));
@@ -82,7 +89,7 @@ async function main() {
 
   const expected = csvProfile(readFileSync(resolve(process.cwd(), "data/logistics.csv"), "utf8"));
   const pool = new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: postgresConnectionString(process.env.DATABASE_URL),
     ssl: process.env.POSTGRES_SSL === "false" ? false : { rejectUnauthorized: false }
   });
 

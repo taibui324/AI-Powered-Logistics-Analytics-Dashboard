@@ -72,9 +72,17 @@ function sslConfig() {
   return process.env.POSTGRES_SSL === "false" ? false : { rejectUnauthorized: false };
 }
 
+function postgresConnectionString() {
+  const databaseUrl = requireServerEnv("DATABASE_URL");
+  if (process.env.POSTGRES_SSL === "false") return databaseUrl;
+  const url = new URL(databaseUrl);
+  url.searchParams.delete("sslmode");
+  return url.toString();
+}
+
 function createPool() {
   return new Pool({
-    connectionString: requireServerEnv("DATABASE_URL"),
+    connectionString: postgresConnectionString(),
     ssl: sslConfig(),
     max: 3
   });
