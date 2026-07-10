@@ -68,6 +68,10 @@ function assertEqual(name, actual, expected) {
   }
 }
 
+function sortObjectByKey(value) {
+  return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)));
+}
+
 async function main() {
   loadEnvFile(resolve(process.cwd(), ".env.local"));
   loadEnvFile(resolve(process.cwd(), ".env"));
@@ -95,7 +99,7 @@ async function main() {
 
     assertEqual("row count", actual.rowCount, expected.rowCount);
     assertEqual("max order_date", actual.maxOrderDate, expected.maxOrderDate);
-    assertEqual("status counts", actual.statusCounts, expected.statusCounts);
+    assertEqual("status counts", sortObjectByKey(actual.statusCounts), sortObjectByKey(expected.statusCounts));
     console.log(`Postgres parity verified: ${actual.rowCount} rows, max order_date ${actual.maxOrderDate}.`);
   } finally {
     await pool.end();
