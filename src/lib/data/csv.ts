@@ -44,6 +44,14 @@ function splitCsvLine(line: string) {
   return cells;
 }
 
+function numberCell(row: Record<string, string>, key: string, lineNumber: number) {
+  const raw = row[key]?.trim();
+  if (!raw || !/^-?\d+(\.\d+)?$/.test(raw)) {
+    throw new Error(`Invalid numeric value for ${key} on CSV line ${lineNumber}`);
+  }
+  return Number(raw);
+}
+
 export function parseLogisticsCsv(csv: string): LogisticsOrder[] {
   const [headerLine, ...lines] = csv.trim().split(/\r?\n/);
   const headers = splitCsvLine(headerLine);
@@ -51,8 +59,16 @@ export function parseLogisticsCsv(csv: string): LogisticsOrder[] {
     throw new Error("Unexpected logistics CSV header");
   }
 
-  return lines.filter(Boolean).map((line) => {
-    const row = Object.fromEntries(headers.map((key, index) => [key, splitCsvLine(line)[index] ?? ""]));
+  return lines.filter(Boolean).map((line, index) => {
+    const lineNumber = index + 2;
+    const cells = splitCsvLine(line);
+    if (cells.length === headers.length + 1 && cells[cells.length - 1] === "") {
+      cells.pop();
+    }
+    if (cells.length !== headers.length) {
+      throw new Error(`Unexpected logistics CSV column count on line ${lineNumber}`);
+    }
+    const row = Object.fromEntries(headers.map((key, cellIndex) => [key, cells[cellIndex] ?? ""]));
     return {
       clientId: row.client_id,
       orderId: row.order_id,
@@ -64,11 +80,11 @@ export function parseLogisticsCsv(csv: string): LogisticsOrder[] {
       status: row.status as LogisticsOrder["status"],
       sku: row.sku,
       productCategory: row.product_category,
-      quantity: Number(row.quantity),
-      unitPriceUsd: Number(row.unit_price_usd),
-      orderValueUsd: Number(row.order_value_usd),
+      quantity: numberCell(row, "quantity", lineNumber),
+      unitPriceUsd: numberCell(row, "unit_price_usd", lineNumber),
+      orderValueUsd: numberCell(row, "order_value_usd", lineNumber),
       isPromo: row.is_promo === "1",
-      promoDiscountPct: Number(row.promo_discount_pct),
+      promoDiscountPct: numberCell(row, "promo_discount_pct", lineNumber),
       region: row.region,
       warehouse: row.warehouse
     };

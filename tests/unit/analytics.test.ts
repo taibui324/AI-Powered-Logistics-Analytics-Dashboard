@@ -73,6 +73,24 @@ describe("logistics analytics", () => {
     expect(forecast.chart.data.some((point) => point.series === "forecast")).toBe(true);
   });
 
+  it("returns a zero-demand forecast for empty filtered segments", () => {
+    const forecast = forecastDemand(rows, { sku: "NO-SUCH-SKU" }, 2);
+    expect(forecast.history).toEqual([]);
+    expect(forecast.forecast).toEqual([
+      { month: "2025-04", quantity: 0 },
+      { month: "2025-05", quantity: 0 }
+    ]);
+
+    expect(forecastDemand([], {}, 2).forecast).toEqual([]);
+  });
+
+  it("rejects malformed CSV rows at the data boundary", () => {
+    expect(() => parseLogisticsCsv(`${csv}\nCL-1,O-BAD,2025-01-01`)).toThrow("Unexpected logistics CSV column count");
+    expect(() => parseLogisticsCsv(csv.replace(",2,10,20,", ",not-a-number,10,20,"))).toThrow("Invalid numeric value");
+    expect(() => parseLogisticsCsv(csv.replace(",2,10,20,", ",,10,20,"))).toThrow("Invalid numeric value");
+    expect(parseLogisticsCsv(`${csv},`).at(-1)?.warehouse).toBe("NYC");
+  });
+
   it("routes natural-language questions to analytical tools with explainability", () => {
     const answer = answerQuestion(rows, "Which carrier has the highest delay rate?");
     expect(answer.answer).toContain("highest completed-order delay rate");

@@ -43,24 +43,30 @@ export function ChartRenderer({ spec, height = 240 }: { spec: ChartSpec; height?
   }
 
   if (spec.type === "pie") {
-    const total = spec.data.reduce((sum, row) => sum + Number(row[spec.yKey ?? "orders"] ?? 0), 0);
+    const valueKey = spec.yKey ?? "orders";
+    const nameKey = spec.xKey ?? "name";
+    const rows = spec.data
+      .map((row) => ({ ...row, [valueKey]: Number(row[valueKey] ?? 0) }))
+      .filter((row) => Number.isFinite(row[valueKey] as number));
+    const total = rows.reduce((sum, row) => sum + Number(row[valueKey]), 0);
+    if (!rows.length || total === 0) return <div className="empty-chart">No matching data</div>;
     return (
       <div className="donut-chart" style={{ minHeight: height }}>
         <div className="donut-visual">
           <ResponsiveContainer width="100%" height={height}>
             <PieChart>
               <Pie
-                data={spec.data}
-                dataKey={spec.yKey ?? "orders"}
-                nameKey={spec.xKey ?? "name"}
+                data={rows}
+                dataKey={valueKey}
+                nameKey={nameKey}
                 innerRadius="58%"
                 outerRadius="86%"
                 paddingAngle={1}
                 stroke="#fff"
                 strokeWidth={2}
               >
-                {spec.data.map((row, index) => (
-                  <Cell key={String(row[spec.xKey ?? "name"])} fill={COLORS[index % COLORS.length]} />
+                {rows.map((row, index) => (
+                  <Cell key={String(row[nameKey])} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -72,9 +78,9 @@ export function ChartRenderer({ spec, height = 240 }: { spec: ChartSpec; height?
           </div>
         </div>
         <div className="donut-legend">
-          {spec.data.map((row, index) => {
-            const label = String(row[spec.xKey ?? "name"]);
-            const value = Number(row[spec.yKey ?? "orders"] ?? 0);
+          {rows.map((row, index) => {
+            const label = String(row[nameKey]);
+            const value = Number(row[valueKey]);
             const pct = total ? Math.round((value / total) * 1000) / 10 : 0;
             return (
               <div key={label}>
@@ -97,7 +103,8 @@ export function ChartRenderer({ spec, height = 240 }: { spec: ChartSpec; height?
       const rows = [...spec.data.reduce((map, row) => {
         const x = String(row[xKey]);
         const current = map.get(x) ?? { [xKey]: x };
-        current[String(row[colorKey])] = row[yKey];
+        const value = Number(row[yKey]);
+        current[String(row[colorKey])] = Number.isFinite(value) ? value : 0;
         map.set(x, current);
         return map;
       }, new Map<string, Record<string, string | number>>()).values()];

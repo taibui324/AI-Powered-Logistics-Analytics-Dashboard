@@ -7,6 +7,9 @@ function round(value: number, digits = 0) {
 }
 
 function addMonth(month: string, offset: number) {
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    throw new Error(`Invalid month value: ${month}`);
+  }
   const date = new Date(`${month}-01T00:00:00Z`);
   date.setUTCMonth(date.getUTCMonth() + offset);
   return date.toISOString().slice(0, 7);
@@ -25,11 +28,12 @@ export function forecastDemand(rows: LogisticsOrder[], filters: DashboardFilters
   const recent = monthly.slice(-3);
   const baseline = recent.length ? recent.reduce((sum, row) => sum + row.quantity, 0) / recent.length : 0;
   const trend = recent.length >= 2 ? (recent[recent.length - 1].quantity - recent[0].quantity) / (recent.length - 1) : 0;
-  const lastMonth = monthly[monthly.length - 1]?.month ?? latestOrderDate(rows).slice(0, 7);
-  const forecast = Array.from({ length: months }, (_, index) => ({
+  const sourceRows = filtered.length ? filtered : rows;
+  const lastMonth = monthly[monthly.length - 1]?.month ?? latestOrderDate(sourceRows).slice(0, 7);
+  const forecast = lastMonth ? Array.from({ length: months }, (_, index) => ({
     month: addMonth(lastMonth, index + 1),
     quantity: Math.max(0, round(baseline + trend * (index + 1)))
-  }));
+  })) : [];
   const averageForecast = forecast.length ? round(forecast.reduce((sum, row) => sum + row.quantity, 0) / forecast.length) : 0;
 
   const chart: ChartSpec = {
