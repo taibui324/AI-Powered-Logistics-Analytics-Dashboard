@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseLogisticsCsv } from "@/lib/data/csv";
 import { summarizeDashboard, highestCarrierDelayRate, latestOrderDate } from "@/lib/analytics/dashboard";
 import { forecastDemand } from "@/lib/analytics/forecast";
@@ -24,6 +24,16 @@ CL-2,O-12,2025-11-20,2025-12-05,DHL,A,B,delayed,SKU-9,PAPER,1,10,10,0,0,UK,LON
 CL-2,O-13,2025-12-20,2025-12-22,DHL,A,B,delivered,SKU-9,PAPER,1,10,10,0,0,UK,LON`;
 
 const deliveryWindowRows = parseLogisticsCsv(deliveryWindowCsv);
+
+const originalFetch = global.fetch;
+const originalOpenAiKey = process.env.OPENAI_API_KEY;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  global.fetch = originalFetch;
+  if (originalOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = originalOpenAiKey;
+});
 
 describe("logistics analytics", () => {
   it("computes dashboard KPIs from the read-only dataset", () => {
@@ -94,6 +104,21 @@ describe("logistics analytics", () => {
     expect(answer.table[3]).toMatchObject({ month: "2025-05", series: "forecast" });
   });
 
+  it("routes inventory planning to total demand forecasting with a recommendation", () => {
+    const answer = answerQuestion(rows, "How much inventory should I plan?");
+    expect(answer.intent.tool).toBe("forecast");
+    expect(answer.answer).toContain("Forecasted total demand for the next 4 months");
+    expect(answer.chart.type).toBe("line");
+    expect(answer.recommendation).toContain("Plan around");
+    expect(answer.explainability.methodology).toContain("moving-average");
+  });
+
+  it("clamps forecast horizons to the supported range", () => {
+    const answer = answerQuestion(rows, "Predict demand for the next 24 months");
+    expect(answer.intent.tool).toBe("forecast");
+    expect(answer.table.filter((row) => row.series === "forecast")).toHaveLength(12);
+  });
+
   it("rejects unsupported questions instead of fabricating a delayed-order trend", () => {
     const answer = answerQuestion(rows, "Why did FedEx underperform in Q1?");
     expect(answer.answer).toContain("Unsupported query:");
@@ -104,12 +129,70 @@ describe("logistics analytics", () => {
   });
 
   it("uses deterministic fallback when no OpenAI key is configured", async () => {
-    const oldKey = process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     const answer = await answerQuestionWithOpenAI(rows, "Which carrier has the highest delay rate?");
     expect(answer.mode).toBe("deterministic");
     expect(answer.answer).toContain("highest completed-order delay rate");
-    process.env.OPENAI_API_KEY = oldKey;
+  });
+
+  it("falls back safely when OpenAI returns malformed structured output", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "{not-json" } }] })
+    } as Response);
+
+    const answer = await answerQuestionWithOpenAI(rows, "Which carrier has the highest delay rate?");
+
+    expect(answer.mode).toBe("deterministic");
+    expect(answer.answer).toContain("highest completed-order delay rate");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back safely when OpenAI request fails", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "rate_limited" })
+    } as Response);
+
+    const answer = await answerQuestionWithOpenAI(rows, "How many orders were delivered late last month?");
+
+    expect(answer.mode).toBe("deterministic");
+    expect(answer.answer).toContain("orders were delivered late");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses valid OpenAI structured intent only to route into deterministic tools", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              tool: "forecast",
+              metric: "demand",
+              dimensions: ["month"],
+              filters: { relativeTime: null, sku: null, productCategory: null, warehouse: null },
+              horizonMonths: 4,
+              chart: "line",
+              explanation: "Inventory planning questions are treated as monthly demand forecasts."
+            })
+          }
+        }]
+      })
+    } as Response);
+
+    const answer = await answerQuestionWithOpenAI(rows, "How much inventory should I plan?");
+
+    expect(answer.mode).toBe("openai");
+    expect(answer.question).toBe("How much inventory should I plan?");
+    expect(answer.intent.tool).toBe("forecast");
+    expect(answer.answer).toContain("Forecasted total demand");
+    expect(answer.recommendation).toContain("Plan around");
+    expect(answer.explainability.queryPlan[0]).toBe("OpenAI structured intent classification");
+    expect(answer.explainability.interpretation).toBe("Inventory planning questions are treated as monthly demand forecasts.");
   });
 });
 
@@ -137,6 +220,9 @@ describe("canonical logistics dataset", () => {
     expect(forecast.intent.tool).toBe("forecast");
     expect(forecast.table.filter((row) => row.series === "forecast")).toHaveLength(4);
     expect(forecast.explainability.filters).toMatchObject({ sku: "CRAYON-0017" });
+    const inventory = answerQuestion(realRows, "How much inventory should I plan?");
+    expect(inventory.intent.tool).toBe("forecast");
+    expect(inventory.recommendation).toContain("Plan around");
   });
 });
 

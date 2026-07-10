@@ -1,6 +1,6 @@
 # Logistics AI Analytics
 
-A Next.js dashboard for the logistics analytics assignment. It uses one unified logistics dataset for dashboard KPIs, natural-language analytical answers, dynamic charts, and monthly demand forecasting. The provided CSV is the seed/reference dataset; Supabase PostgreSQL is supported as the read-only runtime database.
+A Next.js dashboard for the logistics analytics assignment. It uses one unified read-only logistics dataset for dashboard KPIs, natural-language analytical answers, dynamic charts, and monthly demand forecasting. The provided CSV is the canonical seed and valid runtime source; Supabase PostgreSQL is supported as an optional production-style read-only runtime adapter.
 
 ## Local Setup
 
@@ -10,6 +10,8 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+The app is public and does not require authentication.
 
 Useful checks:
 
@@ -30,16 +32,16 @@ npm run db:import
 
 - `OPENAI_API_KEY`: optional. The app works without it through deterministic fallback routing for the required examples.
 - `OPENAI_MODEL`: optional. Defaults to `gpt-5.4-mini` for structured intent classification when `OPENAI_API_KEY` is present.
-- `LOGISTICS_DATA_SOURCE`: optional. Use `supabase` to require Supabase, `csv` to force the local CSV, or leave unset to use Supabase when `SUPABASE_URL` and `SUPABASE_ANON_KEY` exist.
-- `SUPABASE_URL`: Supabase project URL for PostgreSQL-backed runtime reads.
-- `SUPABASE_ANON_KEY`: read-only Supabase anon/publishable key used by server route handlers.
+- `LOGISTICS_DATA_SOURCE`: optional. Use `csv` to force the canonical CSV runtime, `supabase` to require Supabase, or leave unset to use Supabase only when `SUPABASE_URL` and `SUPABASE_ANON_KEY` exist.
+- `SUPABASE_URL`: optional Supabase project URL for PostgreSQL-backed runtime reads.
+- `SUPABASE_ANON_KEY`: optional read-only Supabase anon/publishable key used by server route handlers.
 - `SUPABASE_SERVICE_ROLE_KEY`: import-only secret for `npm run db:import`; never expose it to browser/client code.
 - `NEXT_PUBLIC_DEPLOYMENT_URL`: optional deployment URL. Current deployment is `https://ai-analytics-dashboard-puce.vercel.app`.
 
 ## Architecture And Data Flow
 
-- `data/logistics.csv` is the canonical read-only seed copied from `mock_logistics_data (1).csv`.
-- `supabase/migrations/001_create_logistics_orders.sql` creates the read-only `public.logistics_orders` table, typed constraints, indexes, and select-only RLS policy.
+- `data/logistics.csv` is the canonical read-only seed and fallback runtime dataset copied from `mock_logistics_data (1).csv`.
+- `supabase/migrations/001_create_logistics_orders.sql` creates the optional read-only `public.logistics_orders` table, typed constraints, indexes, and select-only RLS policy.
 - `scripts/import-logistics-csv.mjs` imports the CSV into Supabase with the service role for operator-controlled seeding.
 - `src/lib/data` exposes a repository boundary that reads from Supabase when configured and falls back to the CSV fixture locally.
 - `src/lib/analytics` computes KPIs, filters, chart rows, carrier delay rankings, relative date windows, and forecasts.
@@ -47,7 +49,7 @@ npm run db:import
 - `src/app/api/dashboard` and `src/app/api/ask` expose the shared analytics layer to the UI.
 - `src/components` renders KPIs, charts, filters, analyst answers, explainability, and table previews.
 
-Flow: user filters or question -> API route -> typed data repository -> analytics or forecast tool -> chart spec, table data, explanation -> React dashboard.
+Flow: user filters or question -> API route -> typed data repository -> analytics or forecast tool -> computed result -> chart spec, table data, explanation -> React dashboard.
 
 ## AI Approach
 
@@ -59,6 +61,9 @@ The supported examples are:
 - `Which carrier has the highest delay rate?`
 - `How many orders were delivered late last month?`
 - `Predict demand for SKU CRAYON-0017 for the next 4 months`
+- `How much inventory should I plan?`
+
+OpenAI never receives database credentials and never executes SQL. The model may classify a question into a bounded schema, but TypeScript analytics and forecasting code compute all numbers.
 
 ## Assumptions
 
@@ -76,9 +81,10 @@ Forecasting aggregates monthly quantity, then projects the requested horizon fro
 
 ## Limitations
 
-- Supabase must be seeded from `data/logistics.csv` before enabling `LOGISTICS_DATA_SOURCE=supabase` in production.
+- CSV runtime is the default assignment-valid data path. Supabase must be seeded from `data/logistics.csv` before enabling `LOGISTICS_DATA_SOURCE=supabase`.
 - The fallback interpreter intentionally supports a bounded question set.
 - Forecasting is deterministic and explainable, not a production statistical model.
+- The app does not include user accounts, saved reports, query history, or live logistics-system ingestion.
 
 ## Future Improvements
 
@@ -92,8 +98,6 @@ Repository: `https://github.com/taibui324/AI-Powered-Logistics-Analytics-Dashboa
 
 Public URL: `https://ai-analytics-dashboard-puce.vercel.app`
 
-Build locally with `npm run build`. The current deployment was created with:
+Build locally with `npm run build`. The current production deployment is connected to GitHub and redeploys automatically from pushes to `main`.
 
-```bash
-npx vercel deploy --yes
-```
+Recent validation screenshots are in `docs/screenshots/`.
