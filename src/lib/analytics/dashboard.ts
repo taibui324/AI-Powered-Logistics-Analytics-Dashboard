@@ -141,7 +141,7 @@ export function summarizeDashboard(rows: LogisticsOrder[], filters: DashboardFil
     dimensions: ["order_date", "status", "carrier", "region", "warehouse", "product_category"],
     timeGrain: "month",
     interpretation: "Dashboard summary over the filtered logistics orders.",
-    queryPlan: ["Load read-only logistics dataset", "Apply dashboard filters", "Aggregate KPIs and chart series"],
+    queryPlan: ["Load logistics rows from the configured data source", "Apply dashboard filters", "Aggregate KPIs and chart series"],
     methodology: "On-time rate is delivered / (delivered + delayed). In-transit, exception, and canceled orders stay in total orders but do not enter the on-time denominator.",
     sourceRows: filtered.length
   };
